@@ -1,1 +1,3 @@
 # data-normalization-local
+
+Aby rozwiązanie działało prawidłowo dla kolejnych paczek danych kluczowe jest jedynie konsekwencja w numeracji i naglówkach kolumn w plikach xlsx, zarówno w związanym z bazą szkół jak i spisem kandydatów. Baza szkół została pobrana z https://rspo.men.gov.pl/, gdzie w ustawieniach zaawansowanych zostały wybrane wszystkie typy szkół, z jakich rekrutować się mogą potencjalni kandydaci. Uruchomienie odbywało się na platformie google colab w celu przyspiewszenia procesu, tam trwalo to kilka godzin dla 180000 rekordów przy prawdopodobnie wysokich udostępnionych zasobach.  
