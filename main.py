@@ -2,13 +2,12 @@
 import pandas as pd
 import functions as fun
 
-
-min = input('Proszę podać dolny zakres badanych danych: ')
-max = input('Proszę podać górny zakres badanych danych: ')
-min, max = int(min), int(max)
 data_ofic = input('Proszę podać nazwę pliku zawierającego dane wzorcowe: ')
 data_jsos = input('Proszę podać nazwę pliku zawierającego dane do normalizacji: ')
 
+min = input('Proszę podać dolny zakres badanych danych (początkowy rekord brany pod uwagę w pliku ze szkołami kandydatów): ')
+max = input('Proszę podać górny zakres badanych danych (ostatni rekord brany pod uwagę): ')
+min, max = int(min), int(max)
 
 # odczyt exceli danych wzorcowych i danych z jsosa
 of_exl = pd.read_excel(data_ofic, index_col=None, header=0, usecols="A, N, D, E, P, Q, S, E")
