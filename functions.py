@@ -6,6 +6,155 @@ from os import system, name
 
 # ************************************************* preprocessing *******************************************************
 
+#Rozszerza imiona patronow w formacie "b. chrobry" do pelnego imienia i nazwiska, jesli rozwinieta para wystapila w danych inicjalizacyjnych
+class NameExtender:
+    """
+    fields:
+    :extenders -> Dict of dicts. First one is first letter of name second one surname. Value is tuple :(words count in replacement, full replacement str)
+    """
+    __shortcut_regex=re.compile(r"^(\w)\s*(\w*)")
+    __white_regex=re.compile(r"\s+")
+    
+    def __init__(self,names):
+        """
+        Create names filler
+        :names Preprocessed array of names, first for is name following ones are surname. Empty records and ones starting with name shortcut are valid and ignored
+        """
+        self.extenders={}
+        
+        valid_regex=re.compile(r"^\w\w+ \w+")
+        
+        #Get possible extenders
+        extenders={}
+        for name in names:
+            name=name.strip()
+            name=NameExtender.__white_regex.sub(' ',name)
+            
+            if name=='':
+                continue
+            if not valid_regex.match(name):
+                continue
+            
+            name_letter=name[0]
+            
+            if str.isdigit(name_letter):
+                continue
+            
+            white_index=name.find(' ')
+            
+            end_index=name.find(' ',white_index+1)
+            if end_index==-1:
+                end_index=len(name)
+            surname=name[white_index+1:end_index]
+            
+            if len(surname)<3 or str.isnumeric(surname):
+                continue
+            
+            key=(name_letter,surname)
+            if key in extenders:
+                if not name in extenders[key]:
+                    extenders[key].append(name)
+            else:
+                extenders[key]=[name]
+        
+        #Filter extenders
+        for key,value in extenders.items():
+            num=len(value)
+            
+            if num==1:  #Sure extender
+                extenders[key]=value[0]
+                continue
+            if num==2:  #Valid only if similarity >.85
+                if SequenceMatcher(a=value[0],b=value[1]).ratio()>.85:
+                    extenders[key]=value[0]
+                else:
+                    extenders[key]=None
+                continue
+            
+            #Get average distance to each entry
+            accuracy=[]
+            for entry in value:
+                partial=0
+                for entry2 in value:
+                    if not entry is entry2:
+                        partial+=SequenceMatcher(a=entry,b=entry2).ratio()
+                accuracy.append(partial/(len(value)-1))
+            mx=max(accuracy)
+            
+            if mx<.9 or min(accuracy)<.77:  #filter out sets with big distance
+                extenders[key]=None
+                continue
+            
+            extenders[key]=value[accuracy.index(mx)]
+        
+        #Push all extenders into main extenders dict
+        for key,value in extenders.items():
+            if not value is None:
+                value=(value.count(' ')+1,value)
+                
+                if key[0] in self.extenders:
+                    self.extenders[key[0]][key[1]]=value
+                else:
+                    self.extenders[key[0]]={key[1]:value}
+    
+    def extend(self,st):
+        """
+        Extends single name. Works with pandas DataFrame.apply
+        :st string to extends
+        :return String from argument with extended name shortcuts
+        """
+        st=st.strip()
+        st=NameExtender.__white_regex.sub(' ',st)
+        
+        ret=st
+        search_index=0
+        while True:
+            match=NameExtender.__shortcut_regex.search(ret,search_index)
+            
+            if not match:
+                break
+            
+            start=match.start(0)
+            end=match.end(0)
+            
+            # Filter out matches inside words
+            if not (start==0 and end==len(ret) or
+                    start==0 and ret[end]==' ' or
+                    ret[start-1]==' ' and end==len(ret) or
+                    ret[start-1]==' ' and ret[end]==' '):
+                search_index=end
+                continue
+            
+            # print(ret,':',ret[start:end],':',ret[match.start(1):match.end(1)],':',ret[match.start(2):match.end(2)])
+            
+            first_letter=ret[match.start(1):match.end(1)]
+            if first_letter in self.extenders:
+                extender=self.extenders[first_letter]
+                
+                full_name=None
+                
+                surname=ret[match.start(2):match.end(2)]
+                if surname in extender:  #Direct surname-template_surname match
+                    full_name=extender[surname]
+                else:  #Non direct, time for SequenceMatcher
+                    accuracy=[(key,SequenceMatcher(a=key,b=surname).ratio()) for key in extender.keys()]
+                    mx=max(accuracy,key=lambda x:x[1])
+                    
+                    if mx[1]<.9:
+                        search_index=end
+                        continue
+                    
+                    full_name=extender[mx[0]]
+                
+                if not full_name is None:
+                    if full_name[0]==2:
+                        ret=ret[:start]+full_name[1]+ret[end:]
+                    else:
+                        pass  #TODO implement name extending of multi words surnames
+            search_index=start+1
+        
+        return ret
+
 __roman_regex=re.compile("([lcdmxvi]+)")
 #Zamien rzymskie liczby w stringu na arabskie odpowiedniki
 def __roman_to_arabic(st):
