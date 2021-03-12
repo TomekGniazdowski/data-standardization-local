@@ -51,6 +51,55 @@ def __roman_to_arabic(st):
             ret=ret[:start]+str(value)+ret[end:]
     return ret
 
+#rozszesz popularne skroty typow szkul
+def school_type_shortcut_extender(st):
+    shortcuts={
+        "lo":" liceum ogólnoształcące ",
+        "l.o":" liceum ogólnoształcące ",
+        "sms":" szkoła mistrzostwa sportowego ",
+        "zso":" zespół szkół ogólnokształcących ",
+        "zsz":" zespół szkół zawodowych ",
+        "zesp.":" zespół ",
+        "zs":" zespół szkół ",
+        "z.sz":" zespół szkół ",
+        "zs.":" zespół szkół ",
+        "zse":" zespół szkół ",
+        "zsm":" zespół szkół ",
+        "zsp":" zespół szkół ",
+        "nlo":" niepubliczne liceum ogólno kształcące ",
+        "ckziu":"centrum kształcenia zawodowego 1 ustawicznego ",
+        "zakł":" zakład ",
+        "elekt":" elektryczny ",
+        "elektr":" elektryczny ",
+        "mechan":" mechanizczny ",
+        "dzdz":" dolnoślaski zakład doskonalenia zawodowego ",
+        "ktk":" katolickie towarzystw kultur ",  #not full words for better fuzzy match
+        "pzps":" polski związek piłki siatkowej "
+    }
+    
+    suffix=['','.']
+    
+    ret=st
+    for key in shortcuts.keys():
+        for suf in suffix:
+            index=ret.find(key+suf)
+            
+            if index==-1:
+                continue
+            
+            key_len=len(key)
+            
+            if not (index==0 or str.isnumeric(ret[index-1]) or ret[index-1]==' '):  #Begin not valid
+                continue
+            
+            if not (index+key_len==len(ret) or str.isnumeric(ret[index+key_len]) or ret[
+                index+key_len]==' '):  #End not valid
+                continue
+            
+            ret=ret[:index]+shortcuts[key]+ret[index+3:]
+    
+    return ret
+
 # okrelenie stopnia podobienstwa dwoch stringow
 def w_similar(a, b):
     if a != None and b != None:
@@ -214,17 +263,6 @@ def patron_in(s):
         return ' '.join(n)
     else:
         return ''
-
-
-# rozwiniecie skrotu lo do liceum ogolnoksztalcace
-def lo_full(s):
-    n = s.split()
-    for i in range(len(n)):
-        if n[i] == 'lo':
-            n[i] = 'liceum ogolnokszatlcace'
-            return ' '.join(n)
-    return ' '.join(n)
-
 
 # usuniecie skrotu  nr, nr. i numer
 def nr_out(s):

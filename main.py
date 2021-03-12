@@ -50,7 +50,7 @@ js_exl['SZKOLA_SR'] = js_exl['SZKOLA_SR'].apply(fun.patron_out)
 js_exl['PATRON'] = js_exl['PATRON'].apply(fun.patron_in)
 js_exl['SZKOLA_SR'] = js_exl['SZKOLA_SR'].apply(fun.nr_out)
 js_exl['SZKOLA_SR'] = js_exl['SZKOLA_SR'].apply(fun.school_name)
-js_exl['SZKOLA_SR'] = js_exl['SZKOLA_SR'].apply(fun.lo_full)
+js_exl['SZKOLA_SR'] = js_exl['SZKOLA_SR'].apply(fun.school_type_shortcut_extender)
 js_exl['LOKALIZACJA_SZKOLY_SR'] = js_exl['LOKALIZACJA_SZKOLY_SR'].apply(fun.dash_out)
 print('Dane z jsos obrobione')
 
