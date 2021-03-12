@@ -105,4 +105,13 @@ final_data = {'ID kandydata': js_exl.iloc[min:max, 0], 'Miejscowość szkoły (w
               'Nazwa szkoły z bazy danych (niezmieniona)': norm_data_of_school_org}
 norm_data_final = pd.DataFrame(data=final_data)
 
-norm_data_final.to_excel('plik_wynikowy.xlsx')
+while True:
+    try:
+        norm_data_final.to_excel('plik_wynikowy.xlsx')
+        break
+    except FileCreateError as x:
+        print("Nie mozna utworzyc pliku.")
+        var=input("Sprobowac ponownie? y/n\nJesli plik jest otwarty w innym programie zamknij go.\n")
+        if var=='y':
+            continue
+        break
