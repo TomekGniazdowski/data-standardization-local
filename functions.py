@@ -6,6 +6,51 @@ from os import system, name
 
 # ************************************************* preprocessing *******************************************************
 
+__roman_regex=re.compile("([lcdmxvi]+)")
+#Zamien rzymskie liczby w stringu na arabskie odpowiedniki
+def __roman_to_arabic(st):
+    """Returns string with greek numbers replaced with arabic ones"""
+    
+    token_val={'i':1,'v':5,'x':10,'l':50,'c':100,'d':500,'m':1000}
+    
+    ret=st
+    search_index=0
+    prepost_chars=[' ',',','.']  #valid chars before or after roman occurrence
+    while True:
+        match=__roman_regex.search(ret,search_index)
+        
+        if not match:
+            break
+        
+        start=match.start(0)
+        end=match.end(0)
+        
+        # Filter out matches inside words
+        if not (start==0 and end==len(ret) or
+                start==0 and ret[end] in prepost_chars or
+                ret[start-1] in prepost_chars and end==len(ret) or
+                ret[start-1] in prepost_chars and ret[end] in prepost_chars):
+            search_index=end
+            continue
+        
+        roman=ret[match.start(1):match.end(1)]
+        last_token_val=10e10
+        value=0
+        for i in range(len(roman)):
+            current_token_val=token_val[roman[i]]
+            if current_token_val>last_token_val:
+                if last_token_val*10<current_token_val:  #misplaced symbols, most likely it's word containing only roman set letters
+                    search_index=end
+                    break
+                value-=2*last_token_val
+            
+            value+=current_token_val
+            
+            last_token_val=current_token_val
+        else:
+            ret=ret[:start]+str(value)+ret[end:]
+    return ret
+
 # okrelenie stopnia podobienstwa dwoch stringow
 def w_similar(a, b):
     if a != None and b != None:
