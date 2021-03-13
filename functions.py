@@ -3,6 +3,7 @@ from difflib import SequenceMatcher
 import roman
 from fuzzywuzzy import fuzz
 from os import system, name
+from tqdm import tqdm
 
 # ************************************************* preprocessing *******************************************************
 
@@ -593,7 +594,7 @@ def find(min, max, norm_data_js_exl, of_exl, dict_of_names):
     rspo_table = []
     prop = {}
     test = {}
-    for i in range(MIN, MAX):
+    for i in tqdm(range(MIN, MAX), total=MAX-MIN):
         max_prop = 0
         ac_max_idx = 0
         ac = 0
@@ -691,8 +692,6 @@ def find(min, max, norm_data_js_exl, of_exl, dict_of_names):
             of_school_loc_table.append('Brak podanego miasta w bazie')
             status.append('Brak podanego miasta w bazie')
             of_school_org_table.append('Brak podanego miasta w bazie')
-
-        print(round( (i - MIN) / (MAX - MIN) * 100, 2), '%')
 
     return of_school_loc_table, prop_table, status, of_school_org_table
 
