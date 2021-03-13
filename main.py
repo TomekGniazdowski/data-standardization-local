@@ -1,6 +1,7 @@
 # Tomasz Gniazdowski i Michał Łopatka
 import pandas as pd
 import functions as fun
+from xlsxwriter.exceptions import FileCreateError
 
 data_ofic = input('Proszę podać nazwę pliku zawierającego dane wzorcowe: ')
 data_jsos = input('Proszę podać nazwę pliku zawierającego dane do normalizacji: ')
@@ -35,6 +36,8 @@ of_exl['Nazwa'] = of_exl['Nazwa'].apply(fun.w_out)
 of_exl["Patron"] = of_exl["Nazwa"]
 of_exl['Nazwa'] = of_exl['Nazwa'].apply(fun.patron_out)
 of_exl['Patron'] = of_exl['Patron'].apply(fun.patron_in)
+name_extender=fun.NameExtender(of_exl["Patron"])
+of_exl['Patron'] = of_exl['Patron'].apply(name_extender.extend)
 of_exl['Nazwa'] = of_exl['Nazwa'].apply(fun.nr_out)
 of_exl['Nazwa'] = of_exl['Nazwa'].apply(fun.school_name)
 print('Dane wzorcowe obrobione')
@@ -48,9 +51,11 @@ js_exl['SZKOLA_SR'] = js_exl['SZKOLA_SR'].apply(fun.w_out)
 js_exl["PATRON"] = js_exl['SZKOLA_SR']
 js_exl['SZKOLA_SR'] = js_exl['SZKOLA_SR'].apply(fun.patron_out)
 js_exl['PATRON'] = js_exl['PATRON'].apply(fun.patron_in)
+js_exl['PATRON'] = js_exl['PATRON'].apply(name_extender.extend)
+print(js_exl['PATRON'].loc[js_exl['PATRON']!=""])
 js_exl['SZKOLA_SR'] = js_exl['SZKOLA_SR'].apply(fun.nr_out)
 js_exl['SZKOLA_SR'] = js_exl['SZKOLA_SR'].apply(fun.school_name)
-js_exl['SZKOLA_SR'] = js_exl['SZKOLA_SR'].apply(fun.lo_full)
+js_exl['SZKOLA_SR'] = js_exl['SZKOLA_SR'].apply(fun.school_type_shortcut_extender)
 js_exl['LOKALIZACJA_SZKOLY_SR'] = js_exl['LOKALIZACJA_SZKOLY_SR'].apply(fun.dash_out)
 print('Dane z jsos obrobione')
 
@@ -105,4 +110,13 @@ final_data = {'ID kandydata': js_exl.iloc[min:max, 0], 'Miejscowość szkoły (w
               'Nazwa szkoły z bazy danych (niezmieniona)': norm_data_of_school_org}
 norm_data_final = pd.DataFrame(data=final_data)
 
-norm_data_final.to_excel('plik_wynikowy.xlsx')
+while True:
+    try:
+        norm_data_final.to_excel('plik_wynikowy.xlsx')
+        break
+    except FileCreateError as x:
+        print("Nie mozna utworzyc pliku.")
+        var=input("Sprobowac ponownie? y/n\nJesli plik jest otwarty w innym programie zamknij go.\n")
+        if var=='y':
+            continue
+        break

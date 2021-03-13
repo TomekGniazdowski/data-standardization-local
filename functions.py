@@ -3,8 +3,252 @@ from difflib import SequenceMatcher
 import roman
 from fuzzywuzzy import fuzz
 from os import system, name
+from tqdm import tqdm
 
 # ************************************************* preprocessing *******************************************************
+
+#Rozszerza imiona patronow w formacie "b. chrobry" do pelnego imienia i nazwiska, jesli rozwinieta para wystapila w danych inicjalizacyjnych
+class NameExtender:
+    """
+    fields:
+    :extenders -> Dict of dicts. First one is first letter of name second one surname. Value is tuple :(words count in replacement, full replacement str)
+    """
+    __shortcut_regex=re.compile(r"^(\w)\s*(\w*)")
+    __white_regex=re.compile(r"\s+")
+    
+    def __init__(self,names):
+        """
+        Create names filler
+        :names Preprocessed array of names, first for is name following ones are surname. Empty records and ones starting with name shortcut are valid and ignored
+        """
+        self.extenders={}
+        
+        valid_regex=re.compile(r"^\w\w+ \w+")
+        
+        #Get possible extenders
+        extenders={}
+        for name in names:
+            name=name.strip()
+            name=NameExtender.__white_regex.sub(' ',name)
+            
+            if name=='':
+                continue
+            if not valid_regex.match(name):
+                continue
+            
+            name_letter=name[0]
+            
+            if str.isdigit(name_letter):
+                continue
+            
+            white_index=name.find(' ')
+            
+            end_index=name.find(' ',white_index+1)
+            if end_index==-1:
+                end_index=len(name)
+            surname=name[white_index+1:end_index]
+            
+            if len(surname)<3 or str.isnumeric(surname):
+                continue
+            
+            key=(name_letter,surname)
+            if key in extenders:
+                if not name in extenders[key]:
+                    extenders[key].append(name)
+            else:
+                extenders[key]=[name]
+        
+        #Filter extenders
+        for key,value in extenders.items():
+            num=len(value)
+            
+            if num==1:  #Sure extender
+                extenders[key]=value[0]
+                continue
+            if num==2:  #Valid only if similarity >.85
+                if SequenceMatcher(a=value[0],b=value[1]).ratio()>.85:
+                    extenders[key]=value[0]
+                else:
+                    extenders[key]=None
+                continue
+            
+            #Get average distance to each entry
+            accuracy=[]
+            for entry in value:
+                partial=0
+                for entry2 in value:
+                    if not entry is entry2:
+                        partial+=SequenceMatcher(a=entry,b=entry2).ratio()
+                accuracy.append(partial/(len(value)-1))
+            mx=max(accuracy)
+            
+            if mx<.9 or min(accuracy)<.77:  #filter out sets with big distance
+                extenders[key]=None
+                continue
+            
+            extenders[key]=value[accuracy.index(mx)]
+        
+        #Push all extenders into main extenders dict
+        for key,value in extenders.items():
+            if not value is None:
+                value=(value.count(' ')+1,value)
+                
+                if key[0] in self.extenders:
+                    self.extenders[key[0]][key[1]]=value
+                else:
+                    self.extenders[key[0]]={key[1]:value}
+    
+    def extend(self,st):
+        """
+        Extends single name. Works with pandas DataFrame.apply
+        :st string to extends
+        :return String from argument with extended name shortcuts
+        """
+        st=st.strip()
+        st=NameExtender.__white_regex.sub(' ',st)
+        
+        ret=st
+        search_index=0
+        while True:
+            match=NameExtender.__shortcut_regex.search(ret,search_index)
+            
+            if not match:
+                break
+            
+            start=match.start(0)
+            end=match.end(0)
+            
+            # Filter out matches inside words
+            if not (start==0 and end==len(ret) or
+                    start==0 and ret[end]==' ' or
+                    ret[start-1]==' ' and end==len(ret) or
+                    ret[start-1]==' ' and ret[end]==' '):
+                search_index=end
+                continue
+            
+            # print(ret,':',ret[start:end],':',ret[match.start(1):match.end(1)],':',ret[match.start(2):match.end(2)])
+            
+            first_letter=ret[match.start(1):match.end(1)]
+            if first_letter in self.extenders:
+                extender=self.extenders[first_letter]
+                
+                full_name=None
+                
+                surname=ret[match.start(2):match.end(2)]
+                if surname in extender:  #Direct surname-template_surname match
+                    full_name=extender[surname]
+                else:  #Non direct, time for SequenceMatcher
+                    accuracy=[(key,SequenceMatcher(a=key,b=surname).ratio()) for key in extender.keys()]
+                    mx=max(accuracy,key=lambda x:x[1])
+                    
+                    if mx[1]<.9:
+                        search_index=end
+                        continue
+                    
+                    full_name=extender[mx[0]]
+                
+                if not full_name is None:
+                    if full_name[0]==2:
+                        ret=ret[:start]+full_name[1]+ret[end:]
+                    else:
+                        pass  #TODO implement name extending of multi words surnames
+            search_index=start+1
+        
+        return ret
+
+__roman_regex=re.compile("([lcdmxvi]+)")
+#Zamien rzymskie liczby w stringu na arabskie odpowiedniki
+def __roman_to_arabic(st):
+    """Returns string with greek numbers replaced with arabic ones"""
+    
+    token_val={'i':1,'v':5,'x':10,'l':50,'c':100,'d':500,'m':1000}
+    
+    ret=st
+    search_index=0
+    prepost_chars=[' ',',','.']  #valid chars before or after roman occurrence
+    while True:
+        match=__roman_regex.search(ret,search_index)
+        
+        if not match:
+            break
+        
+        start=match.start(0)
+        end=match.end(0)
+        
+        # Filter out matches inside words
+        if not (start==0 and end==len(ret) or
+                start==0 and ret[end] in prepost_chars or
+                ret[start-1] in prepost_chars and end==len(ret) or
+                ret[start-1] in prepost_chars and ret[end] in prepost_chars):
+            search_index=end
+            continue
+        
+        roman=ret[match.start(1):match.end(1)]
+        last_token_val=10e10
+        value=0
+        for i in range(len(roman)):
+            current_token_val=token_val[roman[i]]
+            if current_token_val>last_token_val:
+                if last_token_val*10<current_token_val:  #misplaced symbols, most likely it's word containing only roman set letters
+                    search_index=end
+                    break
+                value-=2*last_token_val
+            
+            value+=current_token_val
+            
+            last_token_val=current_token_val
+        else:
+            ret=ret[:start]+str(value)+ret[end:]
+    return ret
+
+#rozszesz popularne skroty typow szkul
+def school_type_shortcut_extender(st):
+    shortcuts={
+        "lo":" liceum ogólnoształcące ",
+        "l.o":" liceum ogólnoształcące ",
+        "sms":" szkoła mistrzostwa sportowego ",
+        "zso":" zespół szkół ogólnokształcących ",
+        "zsz":" zespół szkół zawodowych ",
+        "zesp.":" zespół ",
+        "zs":" zespół szkół ",
+        "z.sz":" zespół szkół ",
+        "zs.":" zespół szkół ",
+        "zse":" zespół szkół ",
+        "zsm":" zespół szkół ",
+        "zsp":" zespół szkół ",
+        "nlo":" niepubliczne liceum ogólno kształcące ",
+        "ckziu":"centrum kształcenia zawodowego 1 ustawicznego ",
+        "zakł":" zakład ",
+        "elekt":" elektryczny ",
+        "elektr":" elektryczny ",
+        "mechan":" mechanizczny ",
+        "dzdz":" dolnoślaski zakład doskonalenia zawodowego ",
+        "ktk":" katolickie towarzystw kultur ",  #not full words for better fuzzy match
+        "pzps":" polski związek piłki siatkowej "
+    }
+    
+    suffix=['','.']
+    
+    ret=st
+    for key in shortcuts.keys():
+        for suf in suffix:
+            index=ret.find(key+suf)
+            
+            if index==-1:
+                continue
+            
+            key_len=len(key)
+            
+            if not (index==0 or str.isnumeric(ret[index-1]) or ret[index-1]==' '):  #Begin not valid
+                continue
+            
+            if not (index+key_len==len(ret) or str.isnumeric(ret[index+key_len]) or ret[
+                index+key_len]==' '):  #End not valid
+                continue
+            
+            ret=ret[:index]+shortcuts[key]+ret[index+3:]
+    
+    return ret
 
 # okrelenie stopnia podobienstwa dwoch stringow
 def w_similar(a, b):
@@ -169,17 +413,6 @@ def patron_in(s):
         return ' '.join(n)
     else:
         return ''
-
-
-# rozwiniecie skrotu lo do liceum ogolnoksztalcace
-def lo_full(s):
-    n = s.split()
-    for i in range(len(n)):
-        if n[i] == 'lo':
-            n[i] = 'liceum ogolnokszatlcace'
-            return ' '.join(n)
-    return ' '.join(n)
-
 
 # usuniecie skrotu  nr, nr. i numer
 def nr_out(s):
@@ -361,7 +594,7 @@ def find(min, max, norm_data_js_exl, of_exl, dict_of_names):
     rspo_table = []
     prop = {}
     test = {}
-    for i in range(MIN, MAX):
+    for i in tqdm(range(MIN, MAX), total=MAX-MIN):
         max_prop = 0
         ac_max_idx = 0
         ac = 0
@@ -459,8 +692,6 @@ def find(min, max, norm_data_js_exl, of_exl, dict_of_names):
             of_school_loc_table.append('Brak podanego miasta w bazie')
             status.append('Brak podanego miasta w bazie')
             of_school_org_table.append('Brak podanego miasta w bazie')
-
-        print(round( (i - MIN) / (MAX - MIN) * 100, 2), '%')
 
     return of_school_loc_table, prop_table, status, of_school_org_table
 
